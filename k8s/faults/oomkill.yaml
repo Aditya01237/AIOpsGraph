@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oomkill-app
+  namespace: aiops-demo
+  labels:
+    app: oomkill-app
+    incident: oomkilled
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: oomkill-app
+  template:
+    metadata:
+      labels:
+        app: oomkill-app
+        incident: oomkilled
+    spec:
+      containers:
+        - name: oomkill-app
+          image: python:3.10-slim
+          command:
+            - python
+            - -c
+            - |
+              import time
+              data = []
+              print("Starting memory allocation")
+              while True:
+                  data.append("x" * 10_000_000)
+                  print("Allocated memory chunk")
+                  time.sleep(0.2)
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "32Mi"
+            limits:
+              cpu: "200m"
+              memory: "64Mi"

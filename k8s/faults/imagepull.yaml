@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: imagepull-app
+  namespace: aiops-demo
+  labels:
+    app: imagepull-app
+    incident: imagepullbackoff
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: imagepull-app
+  template:
+    metadata:
+      labels:
+        app: imagepull-app
+        incident: imagepullbackoff
+    spec:
+      containers:
+        - name: imagepull-app
+          image: fake-image-does-not-exist-12345:latest
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+            limits:
+              cpu: "100m"
+              memory: "64Mi"
