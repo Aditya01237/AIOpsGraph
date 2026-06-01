@@ -1,0 +1,4 @@
+kubernetes
+pandas
+pyyaml
+requests
