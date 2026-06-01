@@ -42,7 +42,7 @@ def collect_pods(v1):
     kubectl get pods
     kubectl describe pod
     """
-    pods = v1.list_namespaced_pod(namespace=NAMESPACE)
+    pods = v1.list_namespaced_pod(namespace=NAMESPACE) # equivalent to: kubectl get pods -n aiops-demo
 
     pod_data = []
 
@@ -86,7 +86,7 @@ def collect_events(v1):
     This is similar to:
     kubectl get events -n aiops-demo --sort-by=.lastTimestamp
     """
-    events = v1.list_namespaced_event(namespace=NAMESPACE)
+    events = v1.list_namespaced_event(namespace=NAMESPACE) #equivalent to: kubectl get events -n aiops-demo
 
     event_data = []
 
