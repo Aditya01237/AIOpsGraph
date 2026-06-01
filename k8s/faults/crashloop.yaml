@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crashloop-app
+  namespace: aiops-demo
+  labels:
+    app: crashloop-app
+    incident: crashloopbackoff
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: crashloop-app
+  template:
+    metadata:
+      labels:
+        app: crashloop-app
+        incident: crashloopbackoff
+    spec:
+      containers:
+        - name: crashloop-app
+          image: busybox:latest
+          command:
+            - sh
+            - -c
+            - |
+              echo "Starting crashloop test application"
+              echo "Simulating application startup failure"
+              sleep 2
+              echo "Application crashed due to simulated error"
+              exit 1
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+            limits:
+              cpu: "100m"
+              memory: "64Mi"
