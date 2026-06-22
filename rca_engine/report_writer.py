@@ -10,9 +10,6 @@ OUTPUT_FILE = os.path.join(OUTPUT_DIR, "final_rca_report.md")
 
 
 def load_json(path: str) -> List[Dict[str, Any]]:
-    """
-    Load final RCA JSON report.
-    """
     if not os.path.exists(path):
         raise FileNotFoundError(
             f"Input report not found: {path}\n"
@@ -24,48 +21,94 @@ def load_json(path: str) -> List[Dict[str, Any]]:
 
 
 def safe_text(value: Any) -> str:
-    """
-    Convert None or complex values into safe text.
-    """
     if value is None:
         return "N/A"
-
     return str(value)
 
 
-def write_heading(lines: List[str], text: str, level: int = 1) -> None:
+def select_latest_reports(
+    reports: List[Dict[str, Any]],
+    latest_count: int
+) -> List[Dict[str, Any]]:
     """
-    Add markdown heading.
+    Keep only latest N reports.
+
+    This prevents the Markdown file from becoming too large
+    when old incident snapshots are also present.
     """
+    if latest_count <= 0:
+        return reports
+
+    sorted_reports = sorted(
+        reports,
+        key=lambda report: safe_text(report.get("timestamp")),
+        reverse=True
+    )
+
+    return sorted_reports[:latest_count]
+
+
+def add_heading(lines: List[str], text: str, level: int) -> None:
     lines.append(f"{'#' * level} {text}")
     lines.append("")
 
 
-def write_bullet_list(lines: List[str], items: List[Any]) -> None:
-    """
-    Add markdown bullet list.
-    """
+def add_bullets(lines: List[str], items: List[Any], limit: int = 5) -> None:
     if not items:
         lines.append("- N/A")
         lines.append("")
         return
 
-    for item in items:
+    for item in items[:limit]:
         lines.append(f"- {safe_text(item)}")
+
+    if len(items) > limit:
+        lines.append(f"- ... {len(items) - limit} more items hidden")
 
     lines.append("")
 
 
-def format_top_root_cause(top: Dict[str, Any]) -> List[str]:
-    """
-    Convert top root cause into markdown lines.
-    """
-    lines = []
+def build_summary_table(lines: List[str], reports: List[Dict[str, Any]]) -> None:
+    add_heading(lines, "Summary", 2)
 
-    if not top:
-        lines.append("No root cause candidate found.")
-        lines.append("")
-        return lines
+    lines.append("| # | Incident Type | Top Root Cause | Confidence |")
+    lines.append("|---|---------------|----------------|------------|")
+
+    for index, report in enumerate(reports, start=1):
+        top = report.get("top_root_cause") or {}
+
+        incident_type = safe_text(report.get("incident_type"))
+        cause = safe_text(top.get("root_cause"))
+        confidence = safe_text(top.get("confidence"))
+
+        lines.append(
+            f"| {index} | {incident_type} | {cause} | {confidence} |"
+        )
+
+    lines.append("")
+
+
+def build_single_report(
+    lines: List[str],
+    report: Dict[str, Any],
+    index: int,
+    include_knowledge: bool,
+    max_knowledge_chars: int
+) -> None:
+    incident_type = safe_text(report.get("incident_type"))
+    incident_id = safe_text(report.get("incident_id"))
+    timestamp = safe_text(report.get("timestamp"))
+
+    top = report.get("top_root_cause") or {}
+
+    add_heading(lines, f"Incident {index}: {incident_type}", 2)
+
+    lines.append(f"**Incident ID:** `{incident_id}`")
+    lines.append("")
+    lines.append(f"**Timestamp:** {timestamp}")
+    lines.append("")
+
+    add_heading(lines, "Top Root Cause", 3)
 
     lines.append(f"**Cause:** {safe_text(top.get('root_cause'))}")
     lines.append("")
@@ -74,181 +117,97 @@ def format_top_root_cause(top: Dict[str, Any]) -> List[str]:
     lines.append(f"**Confidence:** {safe_text(top.get('confidence'))}")
     lines.append("")
 
-    write_heading(lines, "Evidence", 3)
-    write_bullet_list(lines, top.get("evidence", [])[:10])
+    add_heading(lines, "Evidence", 3)
+    add_bullets(lines, top.get("evidence", []), limit=5)
 
-    write_heading(lines, "Recommended Fixes", 3)
-    write_bullet_list(lines, top.get("recommended_fix", []))
+    add_heading(lines, "Recommended Fixes", 3)
+    add_bullets(lines, top.get("recommended_fix", []), limit=6)
 
-    return lines
-
-
-def format_all_candidates(candidates: List[Dict[str, Any]]) -> List[str]:
-    """
-    Convert all root cause candidates into markdown.
-    """
-    lines = []
-
-    if not candidates:
-        lines.append("No candidates found.")
-        lines.append("")
-        return lines
-
-    for index, candidate in enumerate(candidates, start=1):
-        lines.append(f"### Candidate {index}")
-        lines.append("")
-        lines.append(f"**Root Cause:** {safe_text(candidate.get('root_cause'))}")
-        lines.append("")
-        lines.append(f"**Category:** {safe_text(candidate.get('category'))}")
-        lines.append("")
-        lines.append(f"**Confidence:** {safe_text(candidate.get('confidence'))}")
-        lines.append("")
-        lines.append("**Fixes:**")
-        lines.append("")
-
-        fixes = candidate.get("recommended_fix", [])
-        if fixes:
-            for fix in fixes:
-                lines.append(f"- {fix}")
-        else:
-            lines.append("- N/A")
-
-        lines.append("")
-
-    return lines
-
-
-def format_retrieved_sources(sources: List[str]) -> List[str]:
-    """
-    Convert retrieved source paths into markdown.
-    """
-    lines = []
+    add_heading(lines, "Retrieved Knowledge Sources", 3)
+    sources = report.get("retrieved_sources", [])
 
     if not sources:
-        lines.append("- No sources retrieved")
+        lines.append("- N/A")
+    else:
+        for source in sources:
+            lines.append(f"- `{source}`")
+
+    lines.append("")
+
+    if include_knowledge:
+        add_heading(lines, "Retrieved Knowledge Preview", 3)
+
+        knowledge = report.get("retrieved_knowledge", "")
+
+        if knowledge:
+            lines.append("```txt")
+            lines.append(knowledge[:max_knowledge_chars])
+            lines.append("```")
+        else:
+            lines.append("N/A")
+
         lines.append("")
-        return lines
-
-    for source in sources:
-        lines.append(f"- `{source}`")
-
-    lines.append("")
-    return lines
-
-
-def format_retrieved_knowledge(knowledge: str, max_chars: int = 3000) -> List[str]:
-    """
-    Add retrieved knowledge preview.
-    """
-    lines = []
-
-    if not knowledge:
-        lines.append("No retrieved knowledge available.")
-        lines.append("")
-        return lines
-
-    preview = knowledge[:max_chars]
-
-    lines.append("```txt")
-    lines.append(preview)
-    lines.append("```")
-    lines.append("")
-
-    return lines
-
-
-def build_single_report(report: Dict[str, Any], index: int) -> List[str]:
-    """
-    Build markdown for one incident RCA report.
-    """
-    lines = []
-
-    incident_type = report.get("incident_type", "Unknown")
-    incident_id = report.get("incident_id", "Unknown")
-
-    write_heading(lines, f"Incident {index}: {incident_type}", 2)
-
-    lines.append(f"**Incident ID:** `{safe_text(incident_id)}`")
-    lines.append("")
-    lines.append(f"**Incident Type:** {safe_text(incident_type)}")
-    lines.append("")
-    lines.append(f"**Timestamp:** {safe_text(report.get('timestamp'))}")
-    lines.append("")
-
-    write_heading(lines, "Top Root Cause", 3)
-    lines.extend(format_top_root_cause(report.get("top_root_cause", {})))
-
-    write_heading(lines, "All Root Cause Candidates", 3)
-    lines.extend(format_all_candidates(report.get("all_candidates", [])))
-
-    write_heading(lines, "Retrieved Knowledge Sources", 3)
-    lines.extend(format_retrieved_sources(report.get("retrieved_sources", [])))
-
-    write_heading(lines, "Retrieved Knowledge Preview", 3)
-    lines.extend(format_retrieved_knowledge(report.get("retrieved_knowledge", "")))
 
     lines.append("---")
     lines.append("")
 
-    return lines
 
+def build_markdown_report(
+    reports: List[Dict[str, Any]],
+    latest_count: int,
+    include_knowledge: bool,
+    max_knowledge_chars: int
+) -> str:
+    selected_reports = select_latest_reports(reports, latest_count)
 
-def build_markdown_report(reports: List[Dict[str, Any]]) -> str:
-    """
-    Build complete markdown RCA report.
-    """
     lines = []
 
-    write_heading(lines, "AIOpsGraph RCA Report", 1)
+    add_heading(lines, "AIOpsGraph RCA Report", 1)
 
-    lines.append("This report was generated from Kubernetes incident evidence, graph context, RCA rules, and retrieved troubleshooting knowledge.")
+    lines.append(
+        "Compact RCA report generated from Kubernetes evidence, graph context, "
+        "rule-based RCA, and retrieved troubleshooting knowledge."
+    )
     lines.append("")
 
-    write_heading(lines, "Summary", 2)
-
-    lines.append(f"**Total Incidents Analyzed:** {len(reports)}")
+    lines.append(f"**Total Reports in JSON:** {len(reports)}")
+    lines.append("")
+    lines.append(f"**Reports Shown in Markdown:** {len(selected_reports)}")
     lines.append("")
 
-    if not reports:
+    if not selected_reports:
         lines.append("No incidents found.")
         lines.append("")
         return "\n".join(lines)
 
-    for index, report in enumerate(reports, start=1):
-        incident_type = report.get("incident_type", "Unknown")
-        top = report.get("top_root_cause", {})
-        cause = top.get("root_cause", "N/A") if top else "N/A"
-        confidence = top.get("confidence", "N/A") if top else "N/A"
+    build_summary_table(lines, selected_reports)
 
-        lines.append(f"- **Incident {index}:** {incident_type}")
-        lines.append(f"  - Root Cause: {cause}")
-        lines.append(f"  - Confidence: {confidence}")
+    add_heading(lines, "Detailed RCA", 2)
 
-    lines.append("")
-
-    write_heading(lines, "Detailed RCA", 2)
-
-    for index, report in enumerate(reports, start=1):
-        lines.extend(build_single_report(report, index))
+    for index, report in enumerate(selected_reports, start=1):
+        build_single_report(
+            lines=lines,
+            report=report,
+            index=index,
+            include_knowledge=include_knowledge,
+            max_knowledge_chars=max_knowledge_chars
+        )
 
     return "\n".join(lines)
 
 
-def save_markdown(content: str, output_file: str = OUTPUT_FILE) -> None:
-    """
-    Save markdown report.
-    """
+def save_markdown(content: str, output_file: str) -> None:
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     with open(output_file, "w") as f:
         f.write(content)
 
-    print(f"Saved Markdown RCA report: {output_file}")
+    print(f"Saved compact Markdown RCA report: {output_file}")
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Convert final RCA JSON report into Markdown"
+        description="Convert final RCA JSON report into compact Markdown"
     )
 
     parser.add_argument(
@@ -265,10 +224,37 @@ def main():
         help="Output Markdown report path"
     )
 
+    parser.add_argument(
+        "--latest",
+        type=int,
+        default=1,
+        help="Number of latest incidents to include in Markdown report"
+    )
+
+    parser.add_argument(
+        "--include-knowledge",
+        action="store_true",
+        help="Include retrieved knowledge preview in Markdown report"
+    )
+
+    parser.add_argument(
+        "--max-knowledge-chars",
+        type=int,
+        default=800,
+        help="Maximum retrieved knowledge characters per incident"
+    )
+
     args = parser.parse_args()
 
     reports = load_json(args.input)
-    markdown = build_markdown_report(reports)
+
+    markdown = build_markdown_report(
+        reports=reports,
+        latest_count=args.latest,
+        include_knowledge=args.include_knowledge,
+        max_knowledge_chars=args.max_knowledge_chars
+    )
+
     save_markdown(markdown, args.output)
 
 
