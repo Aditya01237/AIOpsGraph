@@ -6,6 +6,7 @@ data/raw/*.json
 data/processed/*.json
 data/graph/*.json
 data/rca/*.json
+data/reports/*.md
 
 .DS_Store
 .env
