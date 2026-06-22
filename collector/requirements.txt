@@ -2,3 +2,4 @@ kubernetes
 pandas
 pyyaml
 requests
+pyvis

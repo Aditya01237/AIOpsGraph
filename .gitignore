@@ -7,6 +7,6 @@ data/processed/*.json
 data/graph/*.json
 data/rca/*.json
 data/reports/*.md
-
+visualizations/*.html
 .DS_Store
 .env
