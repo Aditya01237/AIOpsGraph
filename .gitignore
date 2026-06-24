@@ -8,6 +8,8 @@ data/graph/*.json
 data/rca/*.json
 data/reports/*.md
 data/chunks/*.json
+data/embeddings/*.pkl
+data/retrieval/*.json
 visualizations/*.html
 .DS_Store
 .env
